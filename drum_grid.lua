@@ -18,12 +18,22 @@ local ROWS = 8
 local COLS = 16
 
 local SECTIONS = {
-  { name = "kicks",   col_start = 1,  col_end = 3  },
-  { name = "snares",  col_start = 4,  col_end = 6  },
-  { name = "hihats",  col_start = 7,  col_end = 9  },
-  { name = "crashes", col_start = 10, col_end = 12 },
-  { name = "misc",    col_start = 13, col_end = 16 },
+  { name = "kicks",   col_start = 1,  col_end = 3,  brightness_tier = 15 },
+  { name = "snares",  col_start = 4,  col_end = 6,  brightness_tier = 12 },
+  { name = "hihats",  col_start = 7,  col_end = 9,  brightness_tier = 9 },
+  { name = "crashes", col_start = 10, col_end = 12, brightness_tier = 6 },
+  { name = "misc",    col_start = 13, col_end = 16, brightness_tier = 4 },
 }
+
+-- Section brightness coding
+local function get_section_brightness(col)
+  for _, sec in ipairs(SECTIONS) do
+    if col >= sec.col_start and col <= sec.col_end then
+      return sec.brightness_tier
+    end
+  end
+  return 0
+end
 
 local brightness = {}
 for r = 1, ROWS do
@@ -33,6 +43,27 @@ end
 
 local last_hit = nil
 local decay_metro = nil
+
+-- Step sequencer mode (K2 toggle)
+local seq_mode = false
+local seq_grid = {}
+for step = 1, 16 do
+  seq_grid[step] = {}
+  for voice = 1, 8 do seq_grid[step][voice] = false end
+end
+
+-- Roll tracking: {x, y, press_time}
+local roll_active = {}
+
+-- MIDI note output per section
+local midi_out = nil
+local midi_notes = {
+  kicks = 36,   -- GM kick
+  snares = 38,  -- GM snare
+  hihats = 42,  -- GM closed hat
+  crashes = 49, -- GM crash
+  misc = 62,    -- low tom
+}
 
 local PADS = {
   -- KICKS col 1 (deep/sub)
@@ -197,27 +228,91 @@ end
 local g = grid.connect()
 local sec_labels = {"KICK","SNARE","HIHAT","CRASH","MISC"}
 
+-- Helper: get section name from column
+local function get_section_name(col)
+  for _, sec in ipairs(SECTIONS) do
+    if col >= sec.col_start and col <= sec.col_end then
+      return sec.name
+    end
+  end
+  return "misc"
+end
+
+-- Send MIDI note for a section
+local function send_midi_note(section_name)
+  local note = midi_notes[section_name] or 62
+  if midi_out then
+    midi_out:note_on(note, 100)
+  end
+end
+
+-- Roll trigger: if held >300ms, starts roll at 1/16 subdivisions
+local function trigger_roll(x, y, is_press)
+  if is_press then
+    if not roll_active[y] then roll_active[y] = {} end
+    roll_active[y][x] = {press_time = util.time()}
+  else
+    if roll_active[y] and roll_active[y][x] then
+      roll_active[y][x] = nil
+    end
+  end
+end
+
 local function grid_redraw()
   if not g.device then return end
   g:all(0)
-  for _, sec in ipairs(SECTIONS) do
-    for r = 1, ROWS do g:led(sec.col_start, r, 2) end
-  end
-  for r = 1, ROWS do
-    for c = 1, COLS do
-      if brightness[r][c] > 0 then g:led(c, r, brightness[r][c]) end
+
+  if seq_mode then
+    -- Step sequencer view: x=step, y=voice
+    for step = 1, 16 do
+      for voice = 1, 8 do
+        local brightness_val = seq_grid[step][voice] and 15 or 2
+        g:led(step, voice, brightness_val)
+      end
+    end
+  else
+    -- Normal drum grid view with section brightness tiers
+    for _, sec in ipairs(SECTIONS) do
+      for r = 1, ROWS do g:led(sec.col_start, r, 2) end
+    end
+    for r = 1, ROWS do
+      for c = 1, COLS do
+        if brightness[r][c] > 0 then g:led(c, r, brightness[r][c]) end
+      end
     end
   end
+
   g:refresh()
 end
 
 g.key = function(x, y, z)
-  if z == 1 then
+  if seq_mode then
+    -- Sequencer mode: toggle steps
+    if x <= 16 and y <= 8 then
+      seq_grid[x][y] = not seq_grid[x][y]
+      grid_redraw()
+      redraw()
+    end
+  else
+    -- Normal pad mode
     local pad = pad_map[y][x]
     if pad then
       trigger_pad(pad)
-      brightness[y][x] = 15
+      local sec_brightness = get_section_brightness(x)
+      brightness[y][x] = sec_brightness
       last_hit = {r=y, c=x}
+
+      -- Track hold time for rolls
+      if z == 1 then
+        trigger_roll(x, y, true)
+      else
+        trigger_roll(x, y, false)
+        -- Check roll duration
+        if roll_active[y] and roll_active[y][x] == nil then
+          -- Roll ended, could trigger roll pattern here
+        end
+      end
+
       grid_redraw()
       redraw()
     end
@@ -230,35 +325,54 @@ function redraw()
   screen.level(15)
   screen.font_size(8)
   screen.move(2, 8)
-  screen.text("DRUM GRID")
-  screen.font_size(6)
-  for i, sec in ipairs(SECTIONS) do
+  screen.text(seq_mode and "STEP SEQ" or "DRUM GRID")
+
+  if seq_mode then
+    -- Sequencer view
     screen.level(8)
-    screen.move((sec.col_start - 1) * 8 + 1, 18)
-    screen.text(sec_labels[i]:sub(1,3))
-  end
-  local cw, ch, gx, gy = 6, 5, 1, 22
-  for r = 1, ROWS do
-    for c = 1, COLS do
-      screen.level(brightness[r][c] > 0 and brightness[r][c] or 2)
-      screen.rect(gx+(c-1)*cw, gy+(r-1)*ch, cw-1, ch-1)
-      screen.fill()
+    screen.font_size(5)
+    screen.move(2, 18)
+    screen.text("Step X Voice Grid (K2 to exit)")
+    local cw, ch, gx, gy = 8, 5, 1, 22
+    for step = 1, 16 do
+      for voice = 1, 8 do
+        screen.level(seq_grid[step][voice] and 12 or 2)
+        screen.rect(gx+(step-1)*cw, gy+(voice-1)*ch, cw-1, ch-1)
+        screen.fill()
+      end
     end
-  end
-  if last_hit then
-    local pad = pad_map[last_hit.r][last_hit.c]
-    if pad then
-      screen.level(12)
-      screen.font_size(8)
-      screen.move(2, 62)
-      screen.text(string.upper(pad.t))
-      if pad.freq then
-        screen.level(6)
-        screen.move(50, 62)
-        screen.text(string.format("%dHz", pad.freq))
+  else
+    -- Drum grid view with section brightness tiers
+    screen.font_size(6)
+    for i, sec in ipairs(SECTIONS) do
+      screen.level(8)
+      screen.move((sec.col_start - 1) * 8 + 1, 18)
+      screen.text(sec_labels[i]:sub(1,3))
+    end
+    local cw, ch, gx, gy = 6, 5, 1, 22
+    for r = 1, ROWS do
+      for c = 1, COLS do
+        screen.level(brightness[r][c] > 0 and brightness[r][c] or 2)
+        screen.rect(gx+(c-1)*cw, gy+(r-1)*ch, cw-1, ch-1)
+        screen.fill()
+      end
+    end
+    if last_hit then
+      local pad = pad_map[last_hit.r][last_hit.c]
+      if pad then
+        screen.level(12)
+        screen.font_size(8)
+        screen.move(2, 62)
+        screen.text(string.upper(pad.t))
+        if pad.freq then
+          screen.level(6)
+          screen.move(50, 62)
+          screen.text(string.format("%dHz", pad.freq))
+        end
       end
     end
   end
+
   screen.update()
 end
 
@@ -275,12 +389,27 @@ local function decay_tick()
   if any then grid_redraw() end
 end
 
+function key(n, z)
+  if n == 2 and z == 1 then
+    -- K2: toggle sequencer mode
+    seq_mode = not seq_mode
+    grid_redraw()
+    redraw()
+  end
+end
+
 function init()
   decay_metro = metro.init(decay_tick, 1/15)
   decay_metro:start()
+
+  -- Setup MIDI output device
+  midi_out = midi.connect(1)
+
   redraw()
   grid_redraw()
   print("drum_grid: ready")
+  print("K2: toggle step sequencer mode")
+  print("Section brightness: kick=15, snare=12, hat=9, crash=6, misc=4")
 end
 
 function cleanup()

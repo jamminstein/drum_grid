@@ -431,5 +431,6 @@ end
 
 function cleanup()
   if decay_metro then decay_metro:stop() end
-  if opxy_out then opxy_out:cc(123, 0, params:get("opxy_channel")) end
+  if midi_out then for ch=1,16 do midi_out:cc(123,0,ch) end end
+  if opxy_out then for ch=1,16 do opxy_out:cc(123,0,ch) end end
 end

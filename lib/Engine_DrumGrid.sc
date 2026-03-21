@@ -69,15 +69,15 @@ Engine_DrumGrid : CroneEngine {
       Out.ar(out, (sig * amp) ! 2);
     }).add;
 
-    this.addCommand(\kick,    "ffff", { |msg| Synth(\dg_kick,    [\freq, msg[1], \punch, msg[2], \dec, msg[3], \amp, msg[4]]) });
-    this.addCommand(\snare,   "ffff", { |msg| Synth(\dg_snare,   [\freq, msg[1], \tone,  msg[2], \dec, msg[3], \amp, msg[4]]) });
-    this.addCommand(\hat,     "ffff", { |msg| Synth(\dg_hat,     [\freq, msg[1], \dec,   msg[2], \open, msg[3], \amp, msg[4]]) });
-    this.addCommand(\crash,   "ffff", { |msg| Synth(\dg_crash,   [\freq, msg[1], \dec,   msg[2], \shimmer, msg[3], \amp, msg[4]]) });
-    this.addCommand(\tom,     "fff",  { |msg| Synth(\dg_tom,     [\freq, msg[1], \dec,   msg[2], \amp, msg[3]]) });
-    this.addCommand(\cowbell, "fff",  { |msg| Synth(\dg_cowbell, [\freq, msg[1], \dec,   msg[2], \amp, msg[3]]) });
-    this.addCommand(\rim,     "fff",  { |msg| Synth(\dg_rim,     [\freq, msg[1], \dec,   msg[2], \amp, msg[3]]) });
-    this.addCommand(\clap,    "ff",   { |msg| Synth(\dg_clap,    [\dec,  msg[1], \amp,   msg[2]]) });
-    this.addCommand(\clave,   "fff",  { |msg| Synth(\dg_clave,   [\freq, msg[1], \dec,   msg[2], \amp, msg[3]]) });
-    this.addCommand(\shaker,  "fff",  { |msg| Synth(\dg_shaker,  [\freq, msg[1], \dec,   msg[2], \amp, msg[3]]) });
+    this.addCommand(\kick,    "ffff", { |msg| Synth(\dg_kick,    [\out, context.out_b, \freq, msg[1], \punch, msg[2], \dec, msg[3], \amp, msg[4]], target: context.xg) });
+    this.addCommand(\snare,   "ffff", { |msg| Synth(\dg_snare,   [\out, context.out_b, \freq, msg[1], \tone,  msg[2], \dec, msg[3], \amp, msg[4]], target: context.xg) });
+    this.addCommand(\hat,     "ffff", { |msg| Synth(\dg_hat,     [\out, context.out_b, \freq, msg[1], \dec,   msg[2], \open, msg[3], \amp, msg[4]], target: context.xg) });
+    this.addCommand(\crash,   "ffff", { |msg| Synth(\dg_crash,   [\out, context.out_b, \freq, msg[1], \dec,   msg[2], \shimmer, msg[3], \amp, msg[4]], target: context.xg) });
+    this.addCommand(\tom,     "fff",  { |msg| Synth(\dg_tom,     [\out, context.out_b, \freq, msg[1], \dec,   msg[2], \amp, msg[3]], target: context.xg) });
+    this.addCommand(\cowbell, "fff",  { |msg| Synth(\dg_cowbell, [\out, context.out_b, \freq, msg[1], \dec,   msg[2], \amp, msg[3]], target: context.xg) });
+    this.addCommand(\rim,     "fff",  { |msg| Synth(\dg_rim,     [\out, context.out_b, \freq, msg[1], \dec,   msg[2], \amp, msg[3]], target: context.xg) });
+    this.addCommand(\clap,    "ff",   { |msg| Synth(\dg_clap,    [\out, context.out_b, \dec,  msg[1], \amp,   msg[2]], target: context.xg) });
+    this.addCommand(\clave,   "fff",  { |msg| Synth(\dg_clave,   [\out, context.out_b, \freq, msg[1], \dec,   msg[2], \amp, msg[3]], target: context.xg) });
+    this.addCommand(\shaker,  "fff",  { |msg| Synth(\dg_shaker,  [\out, context.out_b, \freq, msg[1], \dec,   msg[2], \amp, msg[3]], target: context.xg) });
   }
 }

@@ -57,6 +57,13 @@ local roll_active = {}
 
 -- MIDI note output per section
 local midi_out = nil
+local opxy_out = nil
+local function opxy_note_on(note, vel)
+  if opxy_out then opxy_out:note_on(note, vel, params:get("opxy_channel")) end
+end
+local function opxy_note_off(note)
+  if opxy_out then opxy_out:note_off(note, 0, params:get("opxy_channel")) end
+end
 local midi_notes = {
   kicks = 36,   -- GM kick
   snares = 38,  -- GM snare
@@ -244,6 +251,7 @@ local function send_midi_note(section_name)
   if midi_out then
     midi_out:note_on(note, 100)
   end
+  opxy_note_on(note, 100)
 end
 
 -- Roll trigger: if held >300ms, starts roll at 1/16 subdivisions
@@ -405,6 +413,15 @@ function init()
   -- Setup MIDI output device
   midi_out = midi.connect(1)
 
+  -- OP-XY params
+  params:add_separator("OP-XY")
+  params:add_number("opxy_device","OP-XY MIDI Device",1,4,2)
+  params:set_action("opxy_device",function(v)
+    opxy_out=midi.connect(v)
+  end)
+  params:add_number("opxy_channel","OP-XY MIDI Channel",1,16,1)
+  opxy_out=midi.connect(params:get("opxy_device"))
+
   redraw()
   grid_redraw()
   print("drum_grid: ready")
@@ -414,4 +431,5 @@ end
 
 function cleanup()
   if decay_metro then decay_metro:stop() end
+  if opxy_out then opxy_out:cc(123, 0, params:get("opxy_channel")) end
 end
